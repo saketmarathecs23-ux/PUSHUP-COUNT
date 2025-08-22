@@ -1,131 +1,132 @@
-#CELL1 : !pip install mediapipe opencv-python
+# Install necessary libraries if not already installed in your Colab environment
+#!pip install opencv-python mediapipe numpy
 
-#CELL2 :
 import cv2
 import mediapipe as mp
 import numpy as np
-import os
 from google.colab import files
 
-# Initialize MediaPipe pose
-mp_pose = mp.solutions.pose
-mp_drawing = mp.solutions.drawing_utils
-mp_drawing_styles = mp.solutions.drawing_styles
-
-# Constants for angle calculations and thresholds
-ANGLE_THRESHOLD_PUSHUP = 160  # Elbow angle for push-up "up" position
-ANGLE_THRESHOLD_SITUP = 120   # Knee angle for sit-up "up" position
-ANGLE_TOLERANCE = 20          # Tolerance for angle detection
-
-# Initialize counters and states
-pushup_counter = 0
-situp_counter = 0
-pushup_stage = None
-situp_stage = None
-  
-#cell3 :
+# Upload the video file
 uploaded = files.upload()
 video_path = list(uploaded.keys())[0]
 print(f"Uploaded video: {video_path}")
 
-#cell4 :  
+mp_drawing = mp.solutions.drawing_utils
+mp_pose = mp.solutions.pose
+
 def calculate_angle(a, b, c):
-    a = np.array(a)  # First point
-    b = np.array(b)  # Mid point
-    c = np.array(c)  # Third point
-    
-    radians = np.arctan2(c[1] - b[1], c[0] - b[0]) - np.arctan2(a[1] - b[1], a[0] - b[0])
+    a = np.array(a)
+    b = np.array(b)
+    c = np.array(c)
+
+    radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
     angle = np.abs(radians * 180.0 / np.pi)
+
     if angle > 180.0:
         angle = 360 - angle
-    return angle
 
-#cell5 :
-# Initialize the pose detection model
-pose = mp_pose.Pose(
-    min_detection_confidence=0.5,
-    min_tracking_confidence=0.5
-)
+    return angle
 
 # Open the input video
 cap = cv2.VideoCapture(video_path)
 
-# Get video properties
-frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-fps = int(cap.get(cv2.CAP_PROP_FPS))
+# Get video properties for output
+width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+fps = cap.get(cv2.CAP_PROP_FPS)
 
-# Define the output video writer
-output_path = '/content/output_video.mp4'
-out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (frame_width, frame_height))
+# Create output video writer
+output_path = 'output_pushups.mp4'
+out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'MP4V'), fps, (width, height))
 
-while cap.isOpened():
-    ret, frame = cap.read()
-    if not ret:
-        break
-    
-    # Convert to RGB
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    
-    # Process the frame
-    results = pose.process(frame_rgb)
-    
-    # Draw landmarks if detected
-    if results.pose_landmarks:
-        mp_drawing.draw_landmarks(
-            frame_rgb,
-            results.pose_landmarks,
-            mp_pose.POSE_CONNECTIONS,
-            landmark_drawing_spec=mp_drawing_styles.get_default_pose_landmarks_style()
-        )
-        
-        # Extract landmarks
-        landmarks = results.pose_landmarks.landmark
-        landmarks_list = [(landmark.x * frame_width, landmark.y * frame_height) for landmark in landmarks]
-        
-        # Push-up detection (using right elbow: landmarks 12, 14, 16 - shoulder, elbow, wrist)
-        if len(landmarks_list) > 16:
-            shoulder = landmarks_list[12]  # Right shoulder
-            elbow = landmarks_list[14]    # Right elbow
-            wrist = landmarks_list[16]    # Right wrist
+counter = 0
+stage = None
+
+with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        # No flip needed for pre-recorded video; adjust if necessary
+        image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image.flags.writeable = False
+        results = pose.process(image)
+        image.flags.writeable = True
+        frame = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+        overlay = frame.copy()
+        cv2.rectangle(overlay, (0, 0), (width, 100), (50, 50, 50), -1)
+        frame = cv2.addWeighted(overlay, 0.4, frame, 0.6, 0)
+
+        # Always display the push-up counter
+        cv2.putText(frame, f'Push-ups: {counter}', (width//2 - 150, 70),
+                    cv2.FONT_HERSHEY_DUPLEX, 2, (0, 255, 255), 3)
+
+        try:
+            landmarks = results.pose_landmarks.landmark
+
+            # Check visibility of required landmarks
+            assert landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].visibility > 0.5, "shoulder not seen"
+            assert landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].visibility > 0.5, "elbow not seen"
+            assert landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].visibility > 0.5, "wrist not seen"
+
+            shoulder = [landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].x * width,
+                        landmarks[mp_pose.PoseLandmark.LEFT_SHOULDER.value].y * height]
+            elbow = [landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].x * width,
+                     landmarks[mp_pose.PoseLandmark.LEFT_ELBOW.value].y * height]
+            wrist = [landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].x * width,
+                     landmarks[mp_pose.PoseLandmark.LEFT_WRIST.value].y * height]
+
             angle = calculate_angle(shoulder, elbow, wrist)
-            
-            # Count push-up
-            if angle > ANGLE_THRESHOLD_PUSHUP - ANGLE_TOLERANCE:
-                if pushup_stage == 'down':
-                    pushup_stage = 'up'
-                    pushup_counter += 1
-            elif angle < ANGLE_THRESHOLD_PUSHUP + ANGLE_TOLERANCE:
-                pushup_stage = 'down'
-        
-        # Sit-up detection (using right knee: landmarks 24, 26, 28 - hip, knee, ankle)
-        if len(landmarks_list) > 28:
-            hip = landmarks_list[24]      # Right hip
-            knee = landmarks_list[26]     # Right knee
-            ankle = landmarks_list[28]    # Right ankle
-            angle = calculate_angle(hip, knee, ankle)
-            
-            # Count sit-up
-            if angle > ANGLE_THRESHOLD_SITUP - ANGLE_TOLERANCE:
-                if situp_stage == 'down':
-                    situp_stage = 'up'
-                    situp_counter += 1
-            elif angle < ANGLE_THRESHOLD_SITUP + ANGLE_TOLERANCE:
-                situp_stage = 'down'
-    
-    # Convert back to BGR for saving
-    frame_bgr = cv2.cvtColor(frame_rgb, cv2.COLOR_RGB2BGR)
-    
-    # Add counter text
-    cv2.putText(frame_bgr, f'Push-ups: {pushup_counter}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    cv2.putText(frame_bgr, f'Sit-ups: {situp_counter}', (10, 70), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
-    
-    # Write the frame to output
-    out.write(frame_bgr)
 
+            cv2.putText(frame, f'Elbow Angle: {int(angle)}°', (30, 70),
+                        cv2.FONT_HERSHEY_DUPLEX, 1.2, (255, 255, 0), 2)
+
+            if angle > 160:
+                stage = "up"
+            if angle < 90 and stage == 'up':
+                stage = "down"
+                counter += 1
+
+            bar_fill = np.interp(angle, (90, 160), (350, 0))
+
+            for i in range(int(350 - bar_fill), 350):
+                color = (0, int(255 * (i - (350 - bar_fill)) / bar_fill), 255 - int(255 * (i - (350 - bar_fill)) / bar_fill))
+                cv2.line(frame, (100, i + 150), (150, i + 150), color, 1)
+                cv2.line(frame, (width - 150, i + 150), (width - 100, i + 150), color, 1)
+
+            cv2.rectangle(frame, (100, 150), (150, 500), (255, 255, 255), 2)
+            cv2.rectangle(frame, (width - 150, 150), (width - 100, 500), (255, 255, 255), 2)
+
+            cv2.circle(frame, (125, 150), 10, (255, 0, 255), -1)
+            cv2.circle(frame, (width - 125, 150), 10, (255, 0, 255), -1)
+
+            mp_drawing.draw_landmarks(
+                frame,
+                results.pose_landmarks,
+                mp_pose.POSE_CONNECTIONS,
+                mp_drawing.DrawingSpec(color=(0, 255, 255), thickness=6, circle_radius=8),
+                mp_drawing.DrawingSpec(color=(255, 0, 255), thickness=4, circle_radius=6)
+            )
+
+        except AssertionError as e:
+            # Display the error message just below the push-up counter with same size and style
+            cv2.putText(frame, f"Pushup cannot be detected ({str(e)})", (width//2 - 150, 120),
+                        cv2.FONT_HERSHEY_DUPLEX, 2, (0, 255, 255), 3)
+        except:
+            # Handle other exceptions (e.g., no landmarks detected) with same size and style
+            cv2.putText(frame, "Pushup cannot be detected (landmarks not found)", (width//2 - 150, 120),
+                        cv2.FONT_HERSHEY_DUPLEX, 2, (0, 255, 255), 3)
+
+        # Write the processed frame to output video
+        out.write(frame)
+
+# Release resources
 cap.release()
 out.release()
-pose.close()
 
-print(f"Output video saved as: {output_path}")
-print(f"Total Push-ups: {pushup_counter}")
+# Download the output video
+files.download(output_path)
+
+print(f"Total push-ups detected: {counter}")
