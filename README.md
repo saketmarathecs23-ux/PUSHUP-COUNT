@@ -8,4 +8,10 @@ An intelligent computer vision system that automatically detects and counts push
 * Enhanced Overlays: Professional-looking UI with pose landmarks visualization
 * Robust Error Handling: Validates input files and provides clear error messages
 * Google Colab Ready: Optimized for easy use in Jupyter notebooks and Google Colab
+## How It Works
+### Detection Algorithm
+* Pose Estimation: Uses MediaPipe's advanced pose detection to identify key body landmarks
+* Angle Calculation: Measures the angle between shoulder, elbow, and wrist joints
+* Movement Analysis: Tracks the elbow angle to determine push-up phases: 1.Up Position: Elbow angle > 160° 2.Down Position: Elbow angle < 90°
+* Counting Logic: Increments counter when transitioning from up to down position
 
