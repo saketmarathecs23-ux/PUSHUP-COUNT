@@ -6,5 +6,14 @@ An intelligent computer vision system that automatically detects and counts push
 * Angle Analysis: Shows elbow angle measurements for form assessment
 * Visual Progress Bars: Interactive progress indicators on both sides of the video
 * Enhanced Overlays: Professional-looking UI with pose landmarks visualization
-*⚡ Robust Error Handling: Validates input files and provides clear error messages
+* Robust Error Handling: Validates input files and provides clear error messages
 * Google Colab Ready: Optimized for easy use in Jupyter notebooks and Google Colab
+## Quick start:
+### Prerequisites:
+* Python 3.7 or higher
+* Google Colab account (recommended) or local Jupyter environment
+### Usage
+* Run in google colab :
+** Upload the script to Google Colab
+** Execute all cells
+** Upload your video when prompted
