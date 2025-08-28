@@ -47,3 +47,8 @@ An intelligent computer vision system that automatically detects and counts push
 * "Pushup cannot be detected (elbow not seen)"
 * "Pushup cannot be detected (wrist not seen)"
 * "Pushup cannot be detected (landmarks not found)"
+## Output
+### Generated Files
+* Enhanced Video: Original video with overlays and analysis
+* Processing Log: Frame-by-frame progress updates
+* Final Count: Total number of detected push-ups
